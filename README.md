@@ -12,3 +12,9 @@ The tool requires Windows 2000 or above.
 Support any PSF file with PSM/XML description file.
 
 A Chinese version of usage can be found on https://blog.betaworld.cn/archives/5/.
+
+
+## Refer
+
+- [`PSFExtractor.ps1`](https://www.xrgzs.top/posts/powershell-extract-psf).
+

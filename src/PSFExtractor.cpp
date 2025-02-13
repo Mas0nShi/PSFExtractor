@@ -14,6 +14,8 @@
 #define MAX_PATH_W 32767
 #define ProgressBarWidth 58
 
+#define TRACE_FAILURE() printf("Failure at %s:%d\n", __FILE__, __LINE__)
+
 using namespace std;
 
 const char PathSeparator = '\\';
@@ -301,9 +303,9 @@ bool ParseDescriptionFileV1() {
 	}
 	LARGE_INTEGER FileSize;
 	GetFileSizeEx(hf, &FileSize);
-	char* FileBuffer = (char*)FDIAlloc(FileSize.QuadPart);
+	char* FileBuffer = (char*)FDIAlloc(static_cast<ULONG>(FileSize.QuadPart));
 	DWORD temp = 0;
-	if (!ReadFile(hf, FileBuffer, FileSize.QuadPart, &temp, NULL)) {
+	if (!ReadFile(hf, FileBuffer, static_cast<DWORD>(FileSize.QuadPart), &temp, NULL)) {
 		return false;
 	}
 	stringstream s(FileBuffer);
@@ -438,91 +440,16 @@ bool LoadMSPatchA(ApplyPatchToFileByBuffersFunc* ApplyPatchToFileByBuffersAddr) 
 			return true;
 		}
 	}
-	HRSRC ResourceInformation = NULL;
-	ResourceInformation = FindResourceW(NULL, MAKEINTRESOURCE(IDR_DLL1), RT_RCDATA);
-	if (!ResourceInformation) {
-		return false;
-	}
-	HGLOBAL hResourcesData = LoadResource(NULL, ResourceInformation);
-	if (!hResourcesData) {
-		return false;
-	}
-	LPVOID ResourcePointer = NULL;
-	ResourcePointer = LockResource(hResourcesData);
-	if (!ResourcePointer) {
-		return false;
-	}
-	WCHAR MSPatchA_Temp[MAX_PATH + 2];
-	if (!GetTempPathW(MAX_PATH + 2, MSPatchA_Temp)) {
-		return false;
-	}
-	lstrcatW(MSPatchA_Temp, L"mspatcha.dll");
-	HANDLE hf = CreateFileW(MSPatchA_Temp, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hf == INVALID_HANDLE_VALUE) {
-		return false;
-	}
-	DWORD temp;
-	if (!WriteFile(hf, ResourcePointer, SizeofResource(NULL, ResourceInformation), &temp, NULL)) {
-		return false;
-	}
-	else {
-		if (!CloseHandle(hf)) {
-			return false;
-		}
-	}
-	MSPatchA = LoadLibraryW(MSPatchA_Temp);
-	if (MSPatchA) {
-		*ApplyPatchToFileByBuffersAddr = (ApplyPatchToFileByBuffersFunc)GetProcAddress(MSPatchA, "ApplyPatchToFileByBuffers");
-		if (*ApplyPatchToFileByBuffersAddr) {
-			return true;
-		}
-	}
 	return false;
 }
 
 bool LoadMSDelta(ApplyDeltaBFunc* ApplyDeltaBAddr, DeltaFreeFunc* DeltaFreeAddr) {
 	HMODULE MSDelta = NULL;
-	MSDelta = LoadLibraryW(L"msdelta.dll");
-	if (MSDelta) {
-		*ApplyDeltaBAddr = (ApplyDeltaBFunc)GetProcAddress(MSDelta, "ApplyDeltaB");
-		*DeltaFreeAddr = (DeltaFreeFunc)GetProcAddress(MSDelta, "DeltaFree");
-		if (*ApplyDeltaBAddr && *DeltaFreeAddr) {
-			return true;
-		}
+	// ! try load UpdateCompression.dll first
+	MSDelta = LoadLibraryW(L"UpdateCompression.dll");
+	if (!MSDelta) {
+		MSDelta = LoadLibraryW(L"msdelta.dll");
 	}
-	HRSRC ResourceInformation = NULL;
-	ResourceInformation = FindResourceW(NULL, MAKEINTRESOURCE(IDR_DLL2), RT_RCDATA);
-	if (!ResourceInformation) {
-		return false;
-	}
-	HGLOBAL hResourcesData = LoadResource(NULL, ResourceInformation);
-	if (!hResourcesData) {
-		return false;
-	}
-	LPVOID ResourcePointer = NULL;
-	ResourcePointer = LockResource(hResourcesData);
-	if (!ResourcePointer) {
-		return false;
-	}
-	WCHAR MSDelta_Temp[MAX_PATH + 2];
-	if (!GetTempPathW(MAX_PATH + 2, MSDelta_Temp)) {
-		return false;
-	}
-	lstrcatW(MSDelta_Temp, L"msdelta.dll");
-	HANDLE hf = CreateFileW(MSDelta_Temp, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hf == INVALID_HANDLE_VALUE) {
-		return false;
-	}
-	DWORD temp;
-	if (!WriteFile(hf, ResourcePointer, SizeofResource(NULL, ResourceInformation), &temp, NULL)) {
-		return false;
-	}
-	else {
-		if (!CloseHandle(hf)) {
-			return false;
-		}
-	}
-	MSDelta = LoadLibraryW(MSDelta_Temp);
 	if (MSDelta) {
 		*ApplyDeltaBAddr = (ApplyDeltaBFunc)GetProcAddress(MSDelta, "ApplyDeltaB");
 		*DeltaFreeAddr = (DeltaFreeFunc)GetProcAddress(MSDelta, "DeltaFree");
@@ -539,6 +466,7 @@ bool WriteOutput() {
 	HANDLE input = CreateFileW(PayloadFileNameW, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	FDIFree(PayloadFileNameW);
 	if (input == INVALID_HANDLE_VALUE) {
+		TRACE_FAILURE();
 		return false;
 	}
 	WCHAR* file = NULL, * TargetDirectoryNameW = NULL, * TargetFilePath = NULL, * TargetFilePathWithPrefix = NULL;
@@ -548,6 +476,7 @@ bool WriteOutput() {
 	ApplyPatchToFileByBuffersFunc ApplyPatchToFileByBuffers = NULL;
 	if (MSPatchALoadFlag) {
 		if (!LoadMSPatchA(&ApplyPatchToFileByBuffers)) {
+			TRACE_FAILURE();
 			return false;
 		}
 	}
@@ -555,6 +484,7 @@ bool WriteOutput() {
 	DeltaFreeFunc DeltaFree = NULL;
 	if (MSDeltaLoadFlag) {
 		if (!LoadMSDelta(&ApplyDeltaB, &DeltaFree)) {
+			TRACE_FAILURE();
 			return false;
 		}
 	}
@@ -565,9 +495,11 @@ bool WriteOutput() {
 		LARGE_INTEGER _offset = { 0 };
 		_offset.QuadPart = item->offset.QuadPart;
 		if (!SetFilePointerEx(input, _offset, NULL, FILE_BEGIN)) {
+			TRACE_FAILURE();
 			return false;
 		}
 		if (!ReadFile(input, buffer, item->length, &temp, NULL)) {
+			TRACE_FAILURE();
 			return false;
 		}
 		file = item->name;
@@ -581,6 +513,7 @@ bool WriteOutput() {
 		CreateDirectoryRecursive(TargetFilePath);
 		output = CreateFileW(TargetFilePath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 		if (output == INVALID_HANDLE_VALUE || output == NULL) {
+			TRACE_FAILURE();
 			return false;
 		}
 		FDIFree(TargetDirectoryNameW);
@@ -589,9 +522,11 @@ bool WriteOutput() {
 			PBYTE PA19DeltaOutput = NULL;
 			ULONG PA19TargetSize;
 			if (!ApplyPatchToFileByBuffers((PBYTE)buffer, item->length, NULL, 0, &PA19DeltaOutput, 0, &PA19TargetSize, &item->time, NULL, NULL, NULL)) {
+				TRACE_FAILURE();
 				return false;
 			}
 			if (!WriteFile(output, PA19DeltaOutput, PA19TargetSize, &temp, NULL)) {
+				TRACE_FAILURE();
 				return false;
 			}
 			VirtualFree(PA19DeltaOutput, 0, MEM_RELEASE);
@@ -601,15 +536,18 @@ bool WriteOutput() {
 			DELTA_INPUT PA30NullDeltaInput = { NULL, 0, false };
 			DELTA_OUTPUT PA30DeltaOutput;
 			if (!ApplyDeltaB(0, PA30NullDeltaInput, PA30DeltaInput, &PA30DeltaOutput)) {
+				TRACE_FAILURE();
 				return false;
 			}
-			if (!WriteFile(output, PA30DeltaOutput.lpStart, PA30DeltaOutput.uSize, &temp, NULL)) {
+			if (!WriteFile(output, PA30DeltaOutput.lpStart, static_cast<DWORD>(PA30DeltaOutput.uSize), &temp, NULL)) {
+				TRACE_FAILURE();
 				return false;
 			}
 			DeltaFree(PA30DeltaOutput.lpStart);
 		}
 		else {
 			if (!WriteFile(output, buffer, item->length, &temp, NULL)) {
+				TRACE_FAILURE();
 				return false;
 			}
 		}
@@ -714,7 +652,7 @@ int wmain(int argc, WCHAR* argv[]) {
 			} while (FindNextFileA(hFind, &findData) != 0);
 			FindClose(hFind);
 		}
-		DescriptionFileName = (char*)FDIAlloc(sizeof(char) * strlen(TargetDirectoryName) + 2 + result.size());
+		DescriptionFileName = (char*)FDIAlloc(static_cast<ULONG>(sizeof(char) * strlen(TargetDirectoryName) + 2 + result.size()));
 		strcpy_s(DescriptionFileName, strlen(TargetDirectoryName) + 2 + result.size(), TargetDirectoryName);
 		strcat_s(DescriptionFileName, strlen(TargetDirectoryName) + 2 + result.size(), result.c_str());
 
@@ -794,7 +732,7 @@ int wmain(int argc, WCHAR* argv[]) {
 	cout << " OK." << endl;
 
 	// Write output
-	TotalFiles = DeltaFileList.size();
+	TotalFiles = static_cast<int>(DeltaFileList.size());
 	if (TotalFiles) {
 		cout << "Writing: " << TotalFiles << " files..." << endl;
 		if (!WriteOutput()) {
