@@ -8,7 +8,6 @@
 #include <io.h>
 #include <fcntl.h>
 #include <fdi.h>
-#include "../resource.h"
 #include "../libs/pugixml/src/pugixml.hpp"
 
 #define MAX_PATH_W 32767
