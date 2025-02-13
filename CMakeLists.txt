@@ -5,3 +5,5 @@ add_executable(PSFExtractor src/PSFExtractor.cpp)
 
 add_subdirectory(libs/pugixml)
 target_link_libraries(PSFExtractor Cabinet pugixml)
+
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

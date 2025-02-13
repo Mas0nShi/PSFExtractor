@@ -18,3 +18,7 @@ A Chinese version of usage can be found on https://blog.betaworld.cn/archives/5/
 
 - [`PSFExtractor.ps1`](https://www.xrgzs.top/posts/powershell-extract-psf).
 
+## More
+
+- fixes new patch package cannot be extract issue.
+- add CI/CD to build and release.
