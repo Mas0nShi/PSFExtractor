@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5.0)
-project(PSFExtractor VERSION 0.1.0 LANGUAGES C CXX)
+project(PSFExtractor VERSION 3.0.8 LANGUAGES C CXX)
 
 add_executable(PSFExtractor src/PSFExtractor.cpp)
 

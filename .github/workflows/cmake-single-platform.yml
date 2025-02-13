@@ -5,8 +5,8 @@ name: CMake on a single platform
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  tag:
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
